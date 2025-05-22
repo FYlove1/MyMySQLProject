@@ -7,7 +7,7 @@
 #include <iostream>
 #include <mysql/mysql.h>
 #include "Sql_Manager.h"
-
+//#include <cppconn/driver.h>
 
 #include <cstring>
 
@@ -121,6 +121,40 @@ bool Sql_Manager::IfUserOnline(const std::string &Account) const {
     mysql_stmt_close(stmt);
 
     return userStatusValue == 1; // 返回 true 表示在线
+}
+
+bool Sql_Manager::AddFriend(const std::string &Account, const std::string &FriendAccount) const {
+    std::string sql = "INSERT INTO UserFriend (Account, FriendAccount) VALUES (?, ?)";
+    MYSQL_STMT* stmt = prepareStatement(sql);
+    if (!stmt) return false;
+
+    MYSQL_BIND bind[2];
+    std::memset(bind, 0, sizeof(bind));
+
+    // 绑定参数
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (void*)Account.c_str();
+    bind[0].buffer_length = Account.length();
+
+    bind[1].buffer_type = MYSQL_TYPE_STRING;
+    bind[1].buffer = (void*)FriendAccount.c_str();
+    bind[1].buffer_length = FriendAccount.length();
+
+
+    if (mysql_stmt_bind_param(stmt, bind)) {
+        std::cerr << "Binding parameters failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    if (mysql_stmt_execute(stmt)) {
+        std::cerr << "Execution failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    mysql_stmt_close(stmt);
+    return true;
 }
 
 

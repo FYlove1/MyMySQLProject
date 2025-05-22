@@ -76,7 +76,9 @@ include_directories(${MYSQL_INCLUDE_DIR})
 
 set(SOURCES main.cpp
         Sql_Manager.cpp
-        Sql_Manager.h)
+        Sql_Manager.h
+        ClientConnectionManager.cpp
+        ClientConnectionManager.h)
 # 添加可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
 

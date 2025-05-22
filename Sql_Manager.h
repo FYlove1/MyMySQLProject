@@ -13,6 +13,8 @@ public:
     static Sql_Manager& getInstance(); // 返回引用
     bool AddNewUser(const std::string &Account, const std::string &UserName, const std::string &passwd);
     bool IfUserOnline(const std::string &Account) const;
+    bool AddFriend(const std::string &Account, const std::string &FriendAccount) const;
+
 
 private:
     Sql_Manager();
