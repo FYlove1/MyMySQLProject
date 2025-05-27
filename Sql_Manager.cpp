@@ -11,6 +11,8 @@
 
 #include <cstring>
 
+
+
 Sql_Manager& Sql_Manager::getInstance() {
     static Sql_Manager instance; // 局部静态变量，线程安全且自动释放
     return instance;
@@ -33,6 +35,8 @@ Sql_Manager::~Sql_Manager() {
 
 //add new User
 bool Sql_Manager::AddNewUser(const std::string& Account, const std::string& UserName, const std::string& passwd) {
+    std::lock_guard<std::mutex> lock(mtx);
+
     std::string sql = "INSERT INTO User_Information (Account, UserName, UserPassword) VALUES (?, ?, ?)";
     MYSQL_STMT* stmt = prepareStatement(sql);
     if (!stmt) return false;
@@ -71,6 +75,8 @@ bool Sql_Manager::AddNewUser(const std::string& Account, const std::string& User
 
 
 bool Sql_Manager::IfUserOnline(const std::string &Account) const {
+    std::lock_guard<std::mutex> lock(mtx);
+
     std::string sql = "SELECT UserStatus FROM User_Information WHERE Account = ?";
     MYSQL_STMT* stmt = prepareStatement(sql);
     if (!stmt) return false;
@@ -124,6 +130,8 @@ bool Sql_Manager::IfUserOnline(const std::string &Account) const {
 }
 
 bool Sql_Manager::AddFriend(const std::string &Account, const std::string &FriendAccount) const {
+    std::lock_guard<std::mutex> lock(mtx);
+
     std::string sql = "INSERT INTO UserFriend (Account, FriendAccount) VALUES (?, ?)";
     MYSQL_STMT* stmt = prepareStatement(sql);
     if (!stmt) return false;
@@ -156,6 +164,93 @@ bool Sql_Manager::AddFriend(const std::string &Account, const std::string &Frien
     mysql_stmt_close(stmt);
     return true;
 }
+
+bool Sql_Manager::GoOnline(const std::string &Account, const std::string &PassWord) {
+    if (IfUserOnline(Account)) {
+        return true;
+    }
+
+    std::lock_guard<std::mutex> lock(mtx);
+
+    // 查询用户密码
+    std::string sql = "SELECT UserPassword FROM User_Information WHERE Account = ?";
+    MYSQL_STMT* stmt = prepareStatement(sql);
+    if (!stmt) return false;
+
+    MYSQL_BIND bind[1];
+    std::memset(bind, 0, sizeof(bind));
+
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (void*)Account.c_str();
+    bind[0].buffer_length = Account.length();
+
+    if (mysql_stmt_bind_param(stmt, bind)) {
+        std::cerr << "Binding parameters failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    if (mysql_stmt_execute(stmt)) {
+        std::cerr << "Execution failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    char password[256]; // 假设密码长度不超过256
+    unsigned long length = 0;
+    bool is_null = false;
+
+    MYSQL_BIND result_bind;
+    std::memset(&result_bind, 0, sizeof(result_bind));
+    result_bind.buffer = password;
+    result_bind.buffer_length = sizeof(password);
+    result_bind.length = &length;
+    result_bind.is_null = &is_null;
+    result_bind.buffer_type = MYSQL_TYPE_STRING;
+
+    if (mysql_stmt_bind_result(stmt, &result_bind)) {
+        std::cerr << "Binding result failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    if (mysql_stmt_fetch(stmt)) {
+        mysql_stmt_close(stmt);
+        return false; // 没有查到用户
+    }
+
+    mysql_stmt_close(stmt);
+
+    if (is_null || std::string(password, length) != PassWord) {
+        return false; // 密码不匹配
+    }
+
+    // 更新用户状态为在线
+    sql = "UPDATE User_Information SET UserStatus = 1 WHERE Account = ?";
+    stmt = prepareStatement(sql);
+    if (!stmt) return false;
+
+    std::memset(bind, 0, sizeof(bind));
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (void*)Account.c_str();
+    bind[0].buffer_length = Account.length();
+
+    if (mysql_stmt_bind_param(stmt, bind)) {
+        std::cerr << "Binding parameters failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    if (mysql_stmt_execute(stmt)) {
+        std::cerr << "Execution failed: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    mysql_stmt_close(stmt);
+    return true;
+}
+
 
 
 // 封装预处理语句初始化

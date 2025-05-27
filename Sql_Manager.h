@@ -4,6 +4,7 @@
 
 #ifndef SQL_MANAGER_H
 #define SQL_MANAGER_H
+#include <mutex>
 #include <mysql/mysql.h>
 #include <string>
 
@@ -14,7 +15,7 @@ public:
     bool AddNewUser(const std::string &Account, const std::string &UserName, const std::string &passwd);
     bool IfUserOnline(const std::string &Account) const;
     bool AddFriend(const std::string &Account, const std::string &FriendAccount) const;
-
+    bool GoOnline(const std::string &Account,const std::string &PassWord);
 
 private:
     Sql_Manager();
@@ -26,6 +27,7 @@ private:
     Sql_Manager& operator=(const Sql_Manager&) = delete;
 
     MYSQL* conn;
+    mutable std::mutex mtx; //互斥锁
 };
 
 

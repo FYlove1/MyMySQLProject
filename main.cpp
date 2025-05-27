@@ -31,73 +31,10 @@ int read_exact(int sockfd, void* buffer, size_t len) {
 int main() {
     ClientConnectionManager client_manager;
     client_manager.startServer(8080);
-    
-    client_manager.acceptConnections();
-    // int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    //
-    // struct sockaddr_in address;
-    // address.sin_family = AF_INET;
-    // address.sin_port = htons(8080);
-    // address.sin_addr.s_addr = INADDR_ANY;
-    //
-    // if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
-    //     std::cerr << "Bind failed\n";
-    //     return -1;
-    // }
-    //
-    // listen(server_socket,  5);
-    //
-    // while (true) {
-    //     struct sockaddr_in client_addr;
-    //     socklen_t client_len = sizeof(client_addr);
-    //     int client_fd = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
-    //     if (client_fd == -1) {
-    //         std::cerr<<"Accept failed\n";
-    //         continue;
-    //     }
-    //     uint32_t data_len;
-    //     if (read_exact(client_fd, &data_len, sizeof(data_len)) == -1) {
-    //         std::cerr<<"Read failed\n";
-    //         close(client_fd);
-    //         continue;
-    //     }
-    //     data_len = ntohl(data_len);
-    //     std::string jsonstring(data_len,  '\0');
-    //     if (read_exact(client_fd, &jsonstring[0], data_len)) {
-    //         std::cerr<<"Read failed\n";
-    //     }
-    //     // 解析 JSON
-    //     try {
-    //         nlohmann::json j = nlohmann::json::parse(jsonstring);
-    //         std::cout << "Received JSON: " << j.dump(4) << std::endl;
-    //
-    //         // 构造响应
-    //         nlohmann::json response = {
-    //             {"ResponseType", "OperationResult"},
-    //             {"received", j},
-    //                 {"Success","1"}
-    //         };
-    //
-    //         std::string response_str = response.dump();
-    //         uint32_t response_len = htonl(static_cast<uint32_t>(response_str.size()));
-    //
-    //         // 发送响应长度
-    //         if (send(client_fd, &response_len, sizeof(response_len), 0) != sizeof(response_len)) {
-    //             std::cerr << "Failed to send response length" << std::endl;
-    //         }
-    //
-    //         // 发送响应数据
-    //         if (send(client_fd, response_str.c_str(), response_str.size(), 0) != static_cast<ssize_t>(response_str.size())) {
-    //             std::cerr << "Failed to send response data" << std::endl;
-    //         }
-    //         std::cout<<"Send Response Data Success"<<std::endl;
-    //
-    //     } catch (const nlohmann::json::parse_error& e) {
-    //         std::cerr << "JSON parse error: " << e.what() << std::endl;
-    //     }
-    //
-    //     close(client_fd);
-    // }
+
+    while (true){}
+
+
 
     Sql_Manager& sql_manager = Sql_Manager::getInstance();
 

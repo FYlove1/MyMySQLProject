@@ -13,6 +13,7 @@
 #include "ClientConnectionManager.h"
 #include <arpa/inet.h>
 #include <nlohmann/json.hpp>
+#include "Sql_Manager.h"
 using json = nlohmann::json;
 ClientConnectionManager::ClientConnectionManager() : listenSocket(-1), running(false) {}
 
@@ -86,10 +87,24 @@ void ClientConnectionManager::acceptConnections() {
     }
 }
 
+std::string ClientConnectionManager::getCurrentTimestamp() {
+    // 获取当前时间点
+    auto now = std::chrono::system_clock::now();
+    // 转换为时间戳（秒）
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    // 转换为本地时间结构体
+    std::tm local_tm = *std::localtime(&now_time_t);
+
+    // 使用 stringstream 构造格式化时间字符串
+    std::ostringstream oss;
+    oss << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S");
+    return oss.str();
+}
+
 void ClientConnectionManager::handleClient(int clientSocket) {
     // 设置 recv 超时时间为 5 秒
     struct timeval timeout;
-    timeout.tv_sec = 5;  // 5秒接收超时
+    timeout.tv_sec = 20;  // 20秒接收超时
     timeout.tv_usec = 0;
     setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     while (running) {
@@ -126,22 +141,46 @@ void ClientConnectionManager::handleClient(int clientSocket) {
             std::string message(messageBuffer.data(), messageSize);
             std::cout << "Received: " << message << std::endl;
 
-            json j_ReceviedJson = json::parse(message);
-            std::string userMessage = j_ReceviedJson.value("message", "");
-
-
-
-
-            if (!userMessage.empty()) {
+            json client_send_json = json::parse(message);
+            std::string request_type  = client_send_json.value("Type", "0");
+            if (!request_type.empty()) {
                 // 构造响应 JSON
-                json response;
-                response["response"] = "Echo: " + userMessage;
-                std::string responseStr = response.dump();
+                json response_client_Json = ResponseJsonToClient(client_send_json);
+                std::string responseStr = response_client_Json.dump();
 
-                // 发送响应（先发长度，再发内容）
+
+                // 发送长度
                 uint32_t responseSize = htonl(static_cast<uint32_t>(responseStr.size()));
-                send(clientSocket, &responseSize, sizeof(responseSize), 0);
-                send(clientSocket, responseStr.c_str(), responseStr.size(), 0);
+                int bytesSent = 0;
+                while (bytesSent < sizeof(responseSize)) {
+                    int sent = send(clientSocket, reinterpret_cast<const char*>(&responseSize) + bytesSent,
+                                    sizeof(responseSize) - bytesSent, 0);
+                    if (sent <= 0) {
+                        // 处理错误
+                        break;
+                    }
+                    bytesSent += sent;
+                }
+
+                // 发送前验证 JSON 字符串是否合法
+                try {
+                    json::parse(responseStr);  // 验证 JSON 是否合法
+                } catch (const json::exception& e) {
+                    std::cerr << "JSON 构造失败: " << e.what() << std::endl;
+                    return;
+                }
+                // 发送JSON数据
+                sleep(1);
+                bytesSent = 0;
+                while (bytesSent < responseStr.size()) {
+                    int sent = send(clientSocket, responseStr.c_str() + bytesSent,
+                                    responseStr.size() - bytesSent, 0);
+                    if (sent <= 0) {
+                        // 处理错误
+                        break;
+                    }
+                    bytesSent += sent;
+                }
             } else {
                 const char* error = "Invalid message format";
                 uint32_t errorSize = htonl(static_cast<uint32_t>(strlen(error)));
@@ -171,6 +210,39 @@ cleanup:
 
 // 处理客户端的json  数据 ，并且书写返回给客户端的json
 nlohmann::json ClientConnectionManager::ResponseJsonToClient(const nlohmann::json &ReceviedJson) {
-
+    json response_to_client;
+    // 获取请求类型
+    std::string requestType = ReceviedJson.value("Type", "0");
+    if (requestType == "1") {
+        // 登录请求
+        bool loginSuccess = HandleLoginEvent(ReceviedJson);
+        response_to_client = {
+            {"ResponseType", "OperationResult"},
+            {"OperationType", 1},
+            {"Success", loginSuccess ? "1" : "0"},
+            {"Message", loginSuccess ? "操作成功" : "登录失败"},
+            {"Timestamp", getCurrentTimestamp()}
+        };
+    }
+    else {
+        // 其他未知请求类型
+        response_to_client = {
+            {"ResponseType", "UnknownRequest"},
+            {"Success", 0},
+            {"Message", "未知请求类型"},
+            {"Timestamp", getCurrentTimestamp()}
+        };
+    }
+    std::cout<<"Return Json"<<response_to_client.dump()<<std::endl;
+    return response_to_client;
 }
+
+
+bool ClientConnectionManager::HandleLoginEvent(const nlohmann::json &ReceviedJson) {
+    Sql_Manager  &Sql_Manager = Sql_Manager::getInstance();
+    return Sql_Manager.GoOnline(ReceviedJson["Account"],  ReceviedJson["Content"]);
+}
+
+
+
 
