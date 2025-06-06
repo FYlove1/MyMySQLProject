@@ -145,7 +145,7 @@ void ClientConnectionManager::handleClient(int clientSocket) {
             std::string request_type  = client_send_json.value("Type", "0");
             if (!request_type.empty()) {
                 // 构造响应 JSON
-                json response_client_Json = ResponseJsonToClient(client_send_json);
+                json response_client_Json = ResponseJsonToClient(client_send_json,clientSocket);
                 std::string responseStr = response_client_Json.dump();
 
 
@@ -196,26 +196,70 @@ void ClientConnectionManager::handleClient(int clientSocket) {
         }
     }
 
+
 cleanup:
     // 清理客户端连接
     std::lock_guard<std::mutex> lock(clientMutex);
+    std::lock_guard<std::mutex> lock2(sessionMutex);
+
     auto it = std::find(clientSockets.begin(), clientSockets.end(), clientSocket);
     if (it != clientSockets.end()) {
+        // 从 socketToAccount 获取账户信息
+        auto accountIter = socketToAccount.find(clientSocket);
+        if (accountIter != socketToAccount.end()) {
+            // 从 accountToSession 删除记录
+            accountToSession.erase(accountIter->second);
+            // 从 socketToAccount 删除记录
+            socketToAccount.erase(accountIter);
+        }
+
         clientSockets.erase(it);
         close(clientSocket);
-        std::cout << "Connection closed by client." << std::endl;
+        std::cout << "Connection closed by client (Socket: " << clientSocket
+                << ")." << std::endl;
     }
 }
 
 
+
 // 处理客户端的json  数据 ，并且书写返回给客户端的json
-nlohmann::json ClientConnectionManager::ResponseJsonToClient(const nlohmann::json &ReceviedJson) {
+nlohmann::json ClientConnectionManager::ResponseJsonToClient(const nlohmann::json &ReceivedJson,int clientsocket) {
     json response_to_client;
     // 获取请求类型
-    std::string requestType = ReceviedJson.value("Type", "0");
+    std::string requestType = ReceivedJson.value("Type", "0");
     if (requestType == "1") {
         // 登录请求
-        bool loginSuccess = HandleLoginEvent(ReceviedJson);
+        bool loginSuccess = HandleLoginEvent(ReceivedJson,clientsocket);
+
+        if (loginSuccess) {
+            std::lock_guard<std::mutex> lock(sessionMutex);
+
+            // 获取客户端地址信息
+            struct sockaddr_in clientAddr;
+            socklen_t clientAddrLen = sizeof(clientAddr);
+            if (getpeername(clientsocket, (struct sockaddr*)&clientAddr, &clientAddrLen) == -1) {
+                std::cerr << "获取客户端地址失败: " << strerror(errno) << std::endl;
+                return false;
+            }
+
+            // 转换IP和端口
+            char ipStr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &clientAddr.sin_addr, ipStr, sizeof(ipStr));
+            uint16_t port = ntohs(clientAddr.sin_port);
+
+            // 构造完整客户端信息
+            ClientSession session{
+                clientsocket,
+                ReceivedJson["Account"],
+                std::string(ipStr) + ":" + std::to_string(port), // 组合IP:Port
+                time(nullptr)
+            };
+
+            // 更新映射关系
+            accountToSession[ReceivedJson["Account"]] = session;
+            socketToAccount[clientsocket] = ReceivedJson["Account"];
+        }
+
         response_to_client = {
             {"ResponseType", "OperationResult"},
             {"OperationType", 1},
@@ -238,9 +282,12 @@ nlohmann::json ClientConnectionManager::ResponseJsonToClient(const nlohmann::jso
 }
 
 
-bool ClientConnectionManager::HandleLoginEvent(const nlohmann::json &ReceviedJson) {
+bool ClientConnectionManager::HandleLoginEvent(const nlohmann::json &ReceivedJson,int clientsocket) {
+
+
+
     Sql_Manager  &Sql_Manager = Sql_Manager::getInstance();
-    return Sql_Manager.GoOnline(ReceviedJson["Account"],  ReceviedJson["Content"]);
+    return Sql_Manager.GoOnline(ReceivedJson["Account"],  ReceivedJson["Content"]);
 }
 
 

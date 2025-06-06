@@ -16,6 +16,7 @@ public:
     bool IfUserOnline(const std::string &Account) const;
     bool AddFriend(const std::string &Account, const std::string &FriendAccount) const;
     bool GoOnline(const std::string &Account,const std::string &PassWord);
+    bool GoOffline(const std::string &Account);
 
 private:
     Sql_Manager();

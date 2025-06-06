@@ -20,7 +20,7 @@ Sql_Manager& Sql_Manager::getInstance() {
 
 Sql_Manager::Sql_Manager() {
     conn = mysql_init(nullptr);
-    if (!mysql_real_connect(conn, "localhost", "testuser", "123456789", "CHAT_USER", 3306, nullptr, 0)) {
+    if (!mysql_real_connect(conn, "localhost", "testuser", "123456789", "ChatServer", 3306, nullptr, 0)) {
         // 错误处理
         std::cerr << "Failed to connect to MySQL server: " << mysql_error(conn) << std::endl;
     }
@@ -251,6 +251,43 @@ bool Sql_Manager::GoOnline(const std::string &Account, const std::string &PassWo
     return true;
 }
 
+bool Sql_Manager::GoOffline(const std::string &Account) {
+    std::lock_guard<std::mutex> lock(mtx); // 保证线程安全
+
+    // 准备更新用户状态的SQL语句
+    std::string sql = "UPDATE User_Information SET UserStatus = 0 WHERE Account = ?";
+    MYSQL_STMT* stmt = prepareStatement(sql);
+    if (!stmt) {
+        std::cerr << "准备下线SQL语句失败" << std::endl;
+        return false;
+    }
+
+    // 绑定账户参数
+    MYSQL_BIND bind[1];
+    std::memset(bind, 0, sizeof(bind));
+
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (void*)Account.c_str();
+    bind[0].buffer_length = Account.length();
+
+    // 执行参数绑定
+    if (mysql_stmt_bind_param(stmt, bind)) {
+        std::cerr << "参数绑定失败: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    // 执行更新操作
+    if (mysql_stmt_execute(stmt)) {
+        std::cerr << "执行下线操作失败: " << mysql_stmt_error(stmt) << std::endl;
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    // 释放资源
+    mysql_stmt_close(stmt);
+    return true;
+}
 
 
 // 封装预处理语句初始化
