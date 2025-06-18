@@ -16,39 +16,59 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <csignal>
 
-int read_exact(int sockfd, void* buffer, size_t len) {
-    char* ptr = static_cast<char*>(buffer);
-    while (len > 0) {
-        ssize_t bytes_read = recv(sockfd, ptr, len, 0);
-        if (bytes_read <= 0) return -1;
-        ptr += bytes_read;
-        len -= bytes_read;
-    }
-    return 0;
+// 全局标志，用于退出
+volatile bool g_running = true;
+
+void signalHandler(int signal) {
+    std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
+    g_running = false;
 }
 
 int main() {
-    ClientConnectionManager client_manager;
-    client_manager.startServer(8080);
+    // 注册信号处理器，用于优雅退出
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
 
-    while (true){}
-
-
-
+    // 初始化数据库管理器
     Sql_Manager& sql_manager = Sql_Manager::getInstance();
 
+    //启动线程池
 
-    // nlohmann::json json_object;
-    // json_object["ceshi"] = 25;
-    // std::string C_char = json_object.dump();
-    // std::cout<<C_char<<std::endl;
 
-    //bool testresult = sql_manager.AddFriend("111","222");
-    //std::cout<<"testresult is :"<<testresult<<std::endl;
-    // sql_manager.AddNewUser("222",  "laosan", "123456");
+    // 创建并启动服务器
+    ClientConnectionManager client_manager;
 
-    //bool is_online =sql_manager.IfUserOnline("1655555");
-    //std::cout<<"if Online"<<is_online<<std::endl;
+    if (!client_manager.startServer(8080)) {
+        std::cerr << "Failed to start server" << std::endl;
+        return -1;
+    }
+
+    std::cout << "Server is running. Press Ctrl+C to stop." << std::endl;
+
+    // 主事件循环
+    while (g_running && client_manager.isRunning()) {
+        // 处理网络事件，超时时间100毫秒
+        int events_processed = client_manager.processEvents(1000);
+
+        if (events_processed == -1) {
+            std::cerr << "Error processing events, shutting down..." << std::endl;
+            break;
+        }
+
+        // 可以在这里添加其他定期任务
+        // 例如：清理过期连接、发送心跳包等
+
+        // 如果处理了事件，可以打印一些统计信息
+        if (events_processed > 0) {
+            // std::cout << "Processed " << events_processed << " events" << std::endl;
+        }
+    }
+
+    // 停止服务器
+    client_manager.stopServer();
+    std::cout << "Server shutdown complete." << std::endl;
+
     return 0;
 }

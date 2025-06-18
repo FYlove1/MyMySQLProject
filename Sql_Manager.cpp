@@ -132,14 +132,15 @@ bool Sql_Manager::IfUserOnline(const std::string &Account) const {
 bool Sql_Manager::AddFriend(const std::string &Account, const std::string &FriendAccount) const {
     std::lock_guard<std::mutex> lock(mtx);
 
-    std::string sql = "INSERT INTO UserFriend (Account, FriendAccount) VALUES (?, ?)";
+    // 添加双向好友关系
+    std::string sql = "INSERT INTO UserFriend (Account, FriendAccount) VALUES (?, ?), (?, ?)";
     MYSQL_STMT* stmt = prepareStatement(sql);
     if (!stmt) return false;
 
-    MYSQL_BIND bind[2];
+    MYSQL_BIND bind[4];
     std::memset(bind, 0, sizeof(bind));
 
-    // 绑定参数
+    // 第一组：Account -> FriendAccount
     bind[0].buffer_type = MYSQL_TYPE_STRING;
     bind[0].buffer = (void*)Account.c_str();
     bind[0].buffer_length = Account.length();
@@ -148,6 +149,14 @@ bool Sql_Manager::AddFriend(const std::string &Account, const std::string &Frien
     bind[1].buffer = (void*)FriendAccount.c_str();
     bind[1].buffer_length = FriendAccount.length();
 
+    // 第二组：FriendAccount -> Account
+    bind[2].buffer_type = MYSQL_TYPE_STRING;
+    bind[2].buffer = (void*)FriendAccount.c_str();
+    bind[2].buffer_length = FriendAccount.length();
+
+    bind[3].buffer_type = MYSQL_TYPE_STRING;
+    bind[3].buffer = (void*)Account.c_str();
+    bind[3].buffer_length = Account.length();
 
     if (mysql_stmt_bind_param(stmt, bind)) {
         std::cerr << "Binding parameters failed: " << mysql_stmt_error(stmt) << std::endl;

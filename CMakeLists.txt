@@ -1,18 +1,16 @@
 cmake_minimum_required(VERSION 3.30)
-project(ChatServer)
-
+# 设置 C++ 标准为 17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 设置 CMake 最低版本要求
-cmake_minimum_required(VERSION 3.10)
+
+
 
 # 项目名称和版本
 project(MyMySQLProject VERSION 1.0)
 
 # 设置 C++ 标准（根据需求选择 C++11/14/17/20）
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 是否构建示例程序（可选）
 set(BUILD_EXAMPLES OFF CACHE BOOL "是否构建示例程序")
@@ -78,7 +76,9 @@ set(SOURCES main.cpp
         Sql_Manager.cpp
         Sql_Manager.h
         ClientConnectionManager.cpp
-        ClientConnectionManager.h)
+        ClientConnectionManager.h
+        ThreadPool.cpp
+        ThreadPool.h)
 # 添加可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
 
